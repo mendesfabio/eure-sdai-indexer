@@ -1,6 +1,6 @@
-# EURe/sDAI Indexer
+# EURe/sDAI Pool Analysis Indexer
 
-A Ponder indexer that analyzes the EURe/sDAI pool to simulate what token balances would have been if the cache rate duration had been properly configured at pool creation. This indexer tracks the difference between actual swap outcomes and what they would have been with fresh rate calculations.
+A Ponder indexer that analyzes the EURe/sDAI pool to simulate token balances if cache rate duration had been properly configured at pool creation. Tracks the difference between actual swap outcomes and expected outcomes using fresh rate calculations.
 
 ## How It Works
 
@@ -25,6 +25,7 @@ These accumulated deltas represent the total amount of tokens that users would h
 - **Exact In Simulation**: For simulation purposes, we assume all swaps are exact-in when computing expected amounts, meaning users specify input and receive pool-determined output
 - **Fixed Analysis Period**: This indexer is designed to run over a specific block range - from pool creation until the cache duration was fixed (more info at `ponder.config.ts`)
 - **Post-Fix Behavior**: After the cache duration was corrected, running the indexer doesn't provide meaningful results since actual vs expected swap outcomes would be zero
+- **Indirect Swaps**: This indexer does not handle indirect swaps (token → BPT → token) due to complexity. These represent <0.1% of total swaps (<300 out of 330k+ transactions) and are primarily CoW solver operations where rate extraction is not intentional. See [Dune query](https://dune.com/queries/5332599) for indirect swap examples
 
 ## Setup
 
@@ -99,11 +100,11 @@ Once the indexer has finished processing, you can query the results through the 
 }
 ```
 
-### Interpreting Results
+### Results Interpretation
 
-The accumulated deltas represent the net difference between the expected swap outputs (calculated with fresh rates) and the actual on-chain swap outputs. The results are from the perspective of the pool/LPs.
+The accumulated deltas represent the net difference between expected swap outputs (calculated with fresh rates) and actual on-chain swap outputs, from the pool/LPs perspective.
 
-To convert the results to human-readable values, divide by 10^18:
+To convert to human-readable values, divide by 10^18:
 
 - **EURe Impact**: -113,099.68 EURe
 - **sDAI Impact**: -167,690.04 sDAI
@@ -115,3 +116,59 @@ A **negative** accumulated delta indicates that traders, in aggregate, received 
 This code is provided as-is for analysis purposes.
 
 Please review the code thoroughly before use and verify all results independently.
+
+## Schema & Documentation
+
+The indexer tracks three main data types:
+
+### `pool` Table
+
+Tracks the current state of the EURe/sDAI pool and accumulated deltas.
+
+| Field                  | Type     | Description                                                      |
+| ---------------------- | -------- | ---------------------------------------------------------------- |
+| `id`                   | `text`   | Pool ID (primary key)                                            |
+| `eureBalance`          | `bigint` | Current EURe balance in the pool                                 |
+| `sdaiBalance`          | `bigint` | Current sDAI balance in the pool                                 |
+| `lastUpdatedBlock`     | `bigint` | Last block where pool was updated                                |
+| `lastUpdatedTimestamp` | `bigint` | Last timestamp when pool was updated                             |
+| `eureAccumulatedDelta` | `bigint` | Total accumulated difference in EURe tokens (expected vs actual) |
+| `sdaiAccumulatedDelta` | `bigint` | Total accumulated difference in sDAI tokens (expected vs actual) |
+
+### `swap` Table
+
+Records every swap with expected vs actual outcomes.
+
+| Field               | Type     | Description                                          |
+| ------------------- | -------- | ---------------------------------------------------- |
+| `id`                | `text`   | Unique event ID (tx hash + log index)                |
+| `poolId`            | `text`   | Pool ID where swap occurred                          |
+| `tokenIn`           | `text`   | Address of input token                               |
+| `tokenOut`          | `text`   | Address of output token                              |
+| `amountIn`          | `bigint` | Amount of tokens input                               |
+| `amountOut`         | `bigint` | Actual amount of tokens output                       |
+| `amountOutExpected` | `bigint` | Expected amount output (calculated with fresh rates) |
+| `amountOutDelta`    | `bigint` | Difference between expected and actual output        |
+| `eureBalance`       | `bigint` | Pool EURe balance after swap                         |
+| `sdaiBalance`       | `bigint` | Pool sDAI balance after swap                         |
+| `eureRate`          | `bigint` | EURe rate used in calculation                        |
+| `sdaiRate`          | `bigint` | sDAI rate used in calculation                        |
+| `blockNumber`       | `bigint` | Block number of swap                                 |
+| `blockTimestamp`    | `bigint` | Timestamp of swap                                    |
+| `transactionHash`   | `text`   | Transaction hash                                     |
+
+### `poolBalanceChanged` Table
+
+Records pool balance changes from add/remove liquidity.
+
+| Field             | Type       | Description                           |
+| ----------------- | ---------- | ------------------------------------- |
+| `id`              | `text`     | Unique event ID (tx hash + log index) |
+| `poolId`          | `text`     | Pool ID where balance changed         |
+| `tokens`          | `text[]`   | Array of token addresses              |
+| `deltas`          | `bigint[]` | Array of balance changes              |
+| `eureBalance`     | `bigint`   | Pool EURe balance after change        |
+| `sdaiBalance`     | `bigint`   | Pool sDAI balance after change        |
+| `blockNumber`     | `bigint`   | Block number of event                 |
+| `blockTimestamp`  | `bigint`   | Timestamp of event                    |
+| `transactionHash` | `text`     | Transaction hash                      |
