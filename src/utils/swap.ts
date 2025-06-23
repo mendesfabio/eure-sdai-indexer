@@ -1,7 +1,7 @@
 import { Context } from "ponder:registry";
 
 import { RateProviderAbi } from "../../abis/RateProviderAbi";
-import { SDAI, AMP, EURE_RATE_PROVIDER, SDAI_RATE_PROVIDER } from "./constants";
+import { SDAI, AMP, EURE_RATE_PROVIDER, SDAI_RATE_PROVIDER } from "./const";
 import { _computeOutGivenExactIn, _computeInvariant } from "./stable";
 
 export async function computeOutGivenExactInWithRates(

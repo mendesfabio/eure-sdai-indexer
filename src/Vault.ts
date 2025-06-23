@@ -1,19 +1,12 @@
 import { ponder } from "ponder:registry";
 import { pool, swapEvent, poolBalanceChangedEvent } from "ponder:schema";
 
-import { SDAI, EURE } from "./utils/constants";
+import { SDAI, EURE } from "./utils/const";
 import { computeOutGivenExactInWithRates } from "./utils/swap";
 
-const POOL_ID =
-  "0xdd439304a77f54b1f7854751ac1169b279591ef7000000000000000000000064";
-
 ponder.on("Vault:PoolRegistered", async ({ event, context }) => {
-  const { poolId } = event.args;
-
-  if (poolId !== POOL_ID) return;
-
   await context.db.insert(pool).values({
-    id: poolId,
+    id: event.args.poolId,
     eureBalance: 0n,
     sdaiBalance: 0n,
     lastUpdatedBlock: event.block.number,
@@ -25,8 +18,6 @@ ponder.on("Vault:PoolRegistered", async ({ event, context }) => {
 
 ponder.on("Vault:Swap", async ({ event, context }) => {
   const { poolId, tokenIn, tokenOut, amountIn, amountOut } = event.args;
-
-  if (poolId !== POOL_ID) return;
 
   const currentBalance = await context.db.find(pool, { id: poolId });
 
@@ -81,8 +72,8 @@ ponder.on("Vault:Swap", async ({ event, context }) => {
     tokenOut,
     amountIn,
     amountOut,
-    expectedOutput,
-    deltaAmountOut,
+    amountOutExpected: expectedOutput,
+    amountOutDelta: deltaAmountOut,
     blockNumber: event.block.number,
     blockTimestamp: event.block.timestamp,
     transactionHash: event.transaction.hash,
@@ -100,8 +91,6 @@ ponder.on("Vault:Swap", async ({ event, context }) => {
 
 ponder.on("Vault:PoolBalanceChanged", async ({ event, context }) => {
   const { poolId, tokens, deltas } = event.args;
-
-  if (poolId !== POOL_ID) return;
 
   const sdaiIndex = tokens.findIndex((token) => token === SDAI);
   const eureIndex = tokens.findIndex((token) => token === EURE);
