@@ -1,8 +1,14 @@
 import { ponder } from "ponder:registry";
 import { pool, swapEvent, poolBalanceChangedEvent } from "ponder:schema";
 
-import { SDAI, EURE } from "./utils/const";
+import {
+  SDAI,
+  EURE,
+  SDAI_RATE_PROVIDER,
+  EURE_RATE_PROVIDER,
+} from "./utils/const";
 import { computeOutGivenExactInWithRates } from "./utils/swap";
+import { RateProviderAbi } from "../abis/RateProviderAbi";
 
 ponder.on("Vault:PoolRegistered", async ({ event, context }) => {
   await context.db.insert(pool).values({
@@ -29,19 +35,30 @@ ponder.on("Vault:Swap", async ({ event, context }) => {
   let expectedOutput = 0n;
   let deltaAmountOut = 0n;
 
-  // Only compute delta if both tokens are EURe/sDAI (excludes add-swap and remove-swap)
+  const sdaiRate = await context.client.readContract({
+    abi: RateProviderAbi,
+    address: SDAI_RATE_PROVIDER,
+    functionName: "getRate",
+  });
+
+  const eureRate = await context.client.readContract({
+    abi: RateProviderAbi,
+    address: EURE_RATE_PROVIDER,
+    functionName: "getRate",
+  });
+
   if (
     (tokenIn === SDAI || tokenIn === EURE) &&
     (tokenOut === SDAI || tokenOut === EURE)
   ) {
-    // Compute expected output using non-cached rate-scaled balances
     expectedOutput = await computeOutGivenExactInWithRates(
-      context,
       tokenIn,
       tokenOut,
       amountIn,
       sdaiBalance,
-      eureBalance
+      eureBalance,
+      sdaiRate,
+      eureRate
     );
 
     deltaAmountOut = expectedOutput - amountOut;
@@ -74,6 +91,10 @@ ponder.on("Vault:Swap", async ({ event, context }) => {
     amountOut,
     amountOutExpected: expectedOutput,
     amountOutDelta: deltaAmountOut,
+    sdaiBalance,
+    eureBalance,
+    sdaiRate,
+    eureRate,
     blockNumber: event.block.number,
     blockTimestamp: event.block.timestamp,
     transactionHash: event.transaction.hash,
@@ -114,6 +135,8 @@ ponder.on("Vault:PoolBalanceChanged", async ({ event, context }) => {
     poolId,
     tokens: [...tokens],
     deltas: [...deltas],
+    sdaiBalance,
+    eureBalance,
     blockNumber: event.block.number,
     blockTimestamp: event.block.timestamp,
     transactionHash: event.transaction.hash,

@@ -1,29 +1,15 @@
-import { Context } from "ponder:registry";
-
-import { RateProviderAbi } from "../../abis/RateProviderAbi";
-import { SDAI, AMP, EURE_RATE_PROVIDER, SDAI_RATE_PROVIDER } from "./const";
+import { SDAI, AMP } from "./const";
 import { _computeOutGivenExactIn, _computeInvariant } from "./stable";
 
 export async function computeOutGivenExactInWithRates(
-  context: Context,
   tokenIn: string,
   tokenOut: string,
   amountIn: bigint,
   sdaiBalance: bigint,
-  eureBalance: bigint
+  eureBalance: bigint,
+  sdaiRate: bigint,
+  eureRate: bigint
 ): Promise<bigint> {
-  const sdaiRate = await context.client.readContract({
-    abi: RateProviderAbi,
-    address: SDAI_RATE_PROVIDER,
-    functionName: "getRate",
-  });
-
-  const eureRate = await context.client.readContract({
-    abi: RateProviderAbi,
-    address: EURE_RATE_PROVIDER,
-    functionName: "getRate",
-  });
-
   const WAD = BigInt(10 ** 18);
   const scaledSdaiBalance = (sdaiBalance * sdaiRate) / WAD;
   const scaledEureBalance = (eureBalance * eureRate) / WAD;
